@@ -51,6 +51,11 @@ module.exports = (env, args) => {
     // In production mode create external source maps without source code to map stack traces.
     // Otherwise stack traces would point to the minified source code which makes it quite impossible to analyze productive issues.
     devtool: devMode ? false : 'nosources-source-map',
+    resolve: {
+      fallback: {
+        crypto: false
+      }
+    },
     output: {
       filename: jsFilename,
       path: outDir,
@@ -91,7 +96,8 @@ module.exports = (env, args) => {
             sourceMap: devMode,
             lessOptions: {
               relativeUrls: false,
-              rewriteUrls: 'off'
+              rewriteUrls: 'off',
+              math: 'always'
             }
           }
         }]
@@ -112,11 +118,10 @@ module.exports = (env, args) => {
               [require.resolve('@babel/preset-env'), {
                 debug: false,
                 targets: {
-                  firefox: '35',
-                  chrome: '40',
-                  ie: '11',
-                  edge: '12',
-                  safari: '8'
+                  firefox: '55',
+                  chrome: '55',
+                  edge: '15',
+                  safari: '13'
                 }
               }]
             ]
@@ -132,7 +137,8 @@ module.exports = (env, args) => {
     ],
     optimization: {
       splitChunks: {
-        chunks: 'all'
+        chunks: 'all',
+        filename: (data, assetInfo) => computeChunkName(data, assetInfo, jsFilename)
       }
     }
   };
@@ -150,13 +156,13 @@ module.exports = (env, args) => {
   }
 
   if (!devMode) {
-    const OptimizeCssAssetsPlugin = require('optimize-css-assets-webpack-plugin');
+    const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
     const TerserPlugin = require('terser-webpack-plugin');
     config.optimization.minimizer = [
       // minify css
-      new OptimizeCssAssetsPlugin({
-        assetNameRegExp: /\.min\.css$/g,
-        cssProcessorPluginOptions: {
+      new CssMinimizerPlugin({
+        test: /\.min\.css$/g,
+        minimizerOptions: {
           preset: ['default', {
             discardComments: {removeAll: true}
           }]
@@ -164,9 +170,7 @@ module.exports = (env, args) => {
       }),
       // minify js
       new TerserPlugin({
-        test: /\.js(\?.*)?$/i,
-        cache: true,
-        parallel: true
+        test: /\.js(\?.*)?$/i
       })
     ];
   }
@@ -218,14 +222,28 @@ function addThemes(entry, options = {}) {
   });
 }
 
+function computeChunkName(data, assetInfo, template) {
+  const delim = '~';
+  const entryPoints = ensureArray(data.runtime).join(delim);
+  const chunk = data.chunk;
+  const isVendors = chunk.idNameHints && chunk.idNameHints.has('vendors');
+  const prefix = isVendors ? 'vendors' : chunk.id;
+  const name = prefix + delim + entryPoints;
+  return template.replace('[name]', name);
+}
+
 function ensureArray(array) {
   if (array === undefined || array === null) {
     return [];
   }
-  if (!Array.isArray(array)) {
-    return [array];
+  if (Array.isArray(array)) {
+    return array;
   }
-  return array;
+  const isIterable = typeof array[Symbol.iterator] === 'function' && typeof array !== 'string';
+  if (isIterable) {
+    return Array.from(array);
+  }
+  return [array];
 }
 
 function nvl(arg, defaultValue) {

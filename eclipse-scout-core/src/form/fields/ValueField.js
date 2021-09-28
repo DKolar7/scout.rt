@@ -574,7 +574,7 @@ export default class ValueField extends FormField {
     if (!$parent) {
       $parent = this.$container;
     }
-    this.$clearIcon = $parent.appendSpan('clear-icon needsclick unfocusable')
+    this.$clearIcon = $parent.appendSpan('clear-icon unfocusable')
       .on('mousedown', this._onClearIconMouseDown.bind(this));
   }
 

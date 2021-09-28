@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2019 BSI Business Systems Integration AG.
+ * Copyright (c) 2010-2021 BSI Business Systems Integration AG.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -27,6 +27,7 @@ module.exports = (config, specEntryPoint) => {
   const webpackArgs = Object.assign({mode: scoutBuild.mode.development}, config.webpackArgs);
   const webpackConfig = webpackConfigProvider(null, webpackArgs);
   delete webpackConfig.entry;
+  delete webpackConfig.output.filename;
 
   const sourceMapPlugin = webpackConfig.plugins.find(plugin => plugin instanceof webpack.SourceMapDevToolPlugin);
   if (sourceMapPlugin) {
@@ -48,7 +49,7 @@ module.exports = (config, specEntryPoint) => {
         pattern: specIndex,
         watched: false
       }],
-    frameworks: ['jasmine-scout', 'jasmine-jquery', 'jasmine-ajax', 'jasmine'], /* order of the frameworks is relevant! */
+    frameworks: ['webpack', 'jasmine-scout', 'jasmine-jquery', 'jasmine-ajax', 'jasmine'], /* order of the frameworks is relevant! */
     // Reporter for "Jasmine Spec Runner" results in browser
     // https://www.npmjs.com/package/karma-jasmine-html-reporter
     reporters: ['kjhtml', 'junit'],

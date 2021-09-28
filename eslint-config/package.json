@@ -10,9 +10,9 @@
   },
   "license": "EPL-1.0",
   "engines": {
-    "node": ">=12.2.0",
-    "npm": ">=6.9.0",
-    "pnpm": ">=5"
+    "node": ">=14.17.0",
+    "npm": ">=6.14.0",
+    "pnpm": ">=6"
   },
   "keywords": [
     "scout",
@@ -47,7 +47,7 @@
   },
   "devDependencies": {
     "@eclipse-scout/releng": "^10.0.0",
-    "eslint": "7.9.0"
+    "eslint": "7.32.0"
   },
   "dependencies": {
     "eslint-config-google": "0.14.0"
