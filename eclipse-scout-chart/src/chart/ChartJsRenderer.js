@@ -10,11 +10,10 @@
  */
 import {AbstractChartRenderer, Chart} from '../index';
 import ChartJs from 'chart.js/auto';
-import {arrays, colorSchemes, Event, numbers, objects, strings, styles} from '@eclipse-scout/core';
+import {arrays, colorSchemes, Event, numbers, objects, scout, strings, styles, tooltips} from '@eclipse-scout/core';
 // noinspection ES6UnusedImports
 import chartjs_plugin_datalabels from 'chartjs-plugin-datalabels';
-// noinspection ES6UnusedImports
-import ChartJsTooltipDelay from './ChartJsTooltipDelay';
+import $ from 'jquery';
 
 /**
  * @typedef ChartJs
@@ -27,7 +26,6 @@ import ChartJsTooltipDelay from './ChartJsTooltipDelay';
  * @property {object} [defaults.global.elements.point]
  * @property {object} [defaults.global.elements.arc]
  * @property {object} [defaults.global.elements.rectangle]
- * @property {object} [defaults.global.tooltips]
  */
 $.extend(true, ChartJs.defaults, {
   maintainAspectRatio: false,
@@ -57,15 +55,6 @@ $.extend(true, ChartJs.defaults, {
       borderWidth: 1,
       borderSkipped: ''
     }
-  },
-  tooltips: {
-    borderWidth: 0,
-    cornerRadius: 3,
-    xPadding: 12,
-    yPadding: 8,
-    titleSpacing: 4,
-    titleMarginBottom: 8,
-    bodySpacing: 4
   },
   overrides: {
     line: {
@@ -128,10 +117,6 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
     this.colorSchemeCssClass = '';
     this.minRadialChartDatalabelSpace = 25;
 
-    this._tooltipTitle = this._formatTooltipTitle.bind(this);
-    this._tooltipLabel = this._formatTooltipLabel.bind(this);
-    this._tooltipLabelColor = this._computeTooltipLabelColor.bind(this);
-
     this._labelFormatter = this._formatLabel.bind(this);
     this._xLabelFormatter = this._formatXLabel.bind(this);
     this._yLabelFormatter = this._formatYLabel.bind(this);
@@ -161,6 +146,8 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
     this._legendPointerLeaveHandler = this._onLegendLeavePointer.bind(this);
 
     this._resizeHandler = this._onResize.bind(this);
+    this._tooltip = null;
+    this._tooltipTimeoutId = null;
   }
 
   _validateChartData() {
@@ -240,7 +227,6 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
     /**
      * @property {number} options.bubble.sizeOfLargestBubble
      * @property {object} options.numberFormatter
-     * @property {number} options.tooltips.titleFontFamily
      * @property {object} options.scales.scaleLabelByTypeMap
      * @property {object} options.scales.xLabelMap
      * @property {object} options.scales.yLabelMap
@@ -423,8 +409,8 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
     }
 
     // update label maps for scales (the label maps, despite being part of the config, can be updated, without redrawing the whole chart)
-    transferProperty(config.options.scales, this.chartJs.config.options.scales, 'xLabelMap', true);
-    transferProperty(config.options.scales, this.chartJs.config.options.scales, 'yLabelMap', true);
+    transferProperty(config.options.scales, this.chartJs.config.options.scales, 'xLabelMap', false);
+    transferProperty(config.options.scales, this.chartJs.config.options.scales, 'yLabelMap', false);
 
     $.extend(true, this.chartJs.config, {
       options: {
@@ -691,15 +677,10 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
     }
 
     config.options = $.extend(true, {}, {
-      hover: {
-        mode: 'nearest'
-      },
-      tooltips: {
-        mode: 'nearest',
-        callbacks: {
-          title: this._tooltipTitle,
-          label: this._tooltipLabel,
-          labelColor: this._tooltipLabelColor
+      plugins: {
+        tooltip: {
+          enabled: false,
+          external: context => this._renderTooltip(context)
         }
       }
     }, config.options);
@@ -707,7 +688,6 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
 
   _formatTooltipTitle(tooltipItems, data) {
     let config = this.chartJs.config,
-      ctx = this.chartJs.ctx,
       tooltipItem = tooltipItems[0],
       title,
       defaultGlobal = ChartJs.defaults,
@@ -717,21 +697,21 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
       defaultTypeTooltips = $.extend(true, {}, defaultTypeTooltips, ChartJs.defaults[config.type].tooltips);
     }
     if (scout.isOneOf(config.type, Chart.Type.PIE, Chart.Type.DOUGHNUT, Chart.Type.POLAR_AREA, Chart.Type.LINE, Chart.Type.BAR, Chart.Type.BAR_HORIZONTAL, Chart.Type.RADAR)) {
-      let label = data.labels[tooltipItem.index];
+      let label = data.labels[tooltipItem.dataIndex];
       title = config.options.reformatLabels ? this._formatLabel(label) : label;
     } else if (config.type === Chart.Type.BUBBLE) {
-      let xAxis = config.options.scales.xAxes[0],
-        yAxis = config.options.scales.yAxes[0],
-        xAxisLabel = xAxis.scaleLabel.labelString,
-        yAxisLabel = yAxis.scaleLabel.labelString;
+      let xAxis = config.options.scales.xAxes,
+        yAxis = config.options.scales.yAxes,
+        xAxisLabel = xAxis.title.text,
+        yAxisLabel = yAxis.title.text;
       xAxisLabel = xAxisLabel ? (xAxisLabel + ':') : ChartJsRenderer.ARROW_LEFT_RIGHT;
       yAxisLabel = yAxisLabel ? (yAxisLabel + ':') : ' ' + ChartJsRenderer.ARROW_UP_DOWN + ' ';
       title = [];
-      let xTickLabel = xAxis.ticks.callback(tooltipItem.xLabel);
+      let xTickLabel = this._formatLabel(tooltipItem.raw.x);
       if (xTickLabel) {
         title.push(xAxisLabel + ' ' + xTickLabel);
       }
-      let yTickLabel = yAxis.ticks.callback(tooltipItem.yLabel);
+      let yTickLabel = this._formatLabel(tooltipItem.raw.y);
       if (yTickLabel) {
         title.push(yAxisLabel + ' ' + yTickLabel);
       }
@@ -741,24 +721,13 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
         defaultTypeTooltipTitle = defaultTypeTooltips.callbacks.title;
       }
       let defaultTooltipTitle = defaultTypeTooltipTitle || defaultGlobalTooltips.callbacks.title;
-      title = defaultTooltipTitle.call(this.chartJs, tooltipItems, data);
+      return arrays.ensure(defaultTooltipTitle.call(this.chartJs, tooltipItems, data));
     }
-    let horizontalSpace = this.$canvas.cssWidth() - (2 * config.options.tooltips.xPadding),
-      measureText = ctx.measureText.bind(ctx),
-      oldFont = ctx.font,
-      titleFontStyle = config.options.tooltips.titleFontStyle || defaultTypeTooltips.titleFontStyle || defaultGlobalTooltips.titleFontStyle || defaultGlobal.defaultFontStyle,
-      titleFontSize = config.options.tooltips.titleFontSize || defaultTypeTooltips.titleFontSize || defaultGlobalTooltips.titleFontSize || defaultGlobal.defaultFontSize,
-      titleFontFamily = config.options.tooltips.titleFontFamily || defaultTypeTooltips.titleFontFamily || defaultGlobalTooltips.titleFontFamily || defaultGlobal.defaultFontFamily,
-      result = [];
-    ctx.font = titleFontStyle + ' ' + titleFontSize + 'px ' + titleFontFamily;
-    arrays.ensure(title).forEach(titleLine => result.push(strings.truncateText(titleLine, horizontalSpace, measureText)));
-    ctx.font = oldFont;
-    return result;
+    return arrays.ensure(title);
   }
 
-  _formatTooltipLabel(tooltipItem, data) {
+  _formatTooltipLabel(data, tooltipItem) {
     let config = this.chartJs.config,
-      ctx = this.chartJs.ctx,
       datasets = data ? data.datasets : null,
       dataset = datasets ? datasets[tooltipItem.datasetIndex] : null,
       label, value,
@@ -770,60 +739,79 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
     }
     if (scout.isOneOf(config.type, Chart.Type.PIE, Chart.Type.DOUGHNUT, Chart.Type.POLAR_AREA, Chart.Type.LINE, Chart.Type.BAR, Chart.Type.BAR_HORIZONTAL, Chart.Type.RADAR)) {
       label = dataset.label;
-      value = this._formatLabel(dataset.data[tooltipItem.index]);
+      value = this._formatLabel(dataset.data[tooltipItem.dataIndex]);
     } else if (config.type === Chart.Type.BUBBLE) {
       label = dataset.label;
-      value = this._formatLabel(dataset.data[tooltipItem.index].z);
+      value = this._formatLabel(dataset.data[tooltipItem.dataIndex].z);
     } else {
       let defaultTypeTooltipLabel;
       if (defaultTypeTooltips.callbacks) {
         defaultTypeTooltipLabel = defaultTypeTooltips.callbacks.label;
       }
       let defaultTooltipLabel = defaultTypeTooltipLabel || defaultGlobalTooltips.callbacks.label;
-      label = defaultTooltipLabel.call(this.chartJs, tooltipItem, data);
+      return arrays.ensure(defaultTooltipLabel.call(this.chartJs, tooltipItem, data));
     }
-    label = ' ' + label;
-    value = value ? ' ' + value : '';
-    let colorRectSize = config.options.tooltips.displayColors ? config.options.tooltips.bodyFontSize || defaultTypeTooltips.bodyFontSize || defaultGlobalTooltips.bodyFontSize || defaultGlobal.defaultFontSize : 0,
-      horizontalSpace = this.$canvas.cssWidth() - (2 * config.options.tooltips.xPadding) - colorRectSize,
-      measureText = ctx.measureText.bind(ctx),
-      result = label + (value ? ':' + value : '');
-    if (measureText(result).width > horizontalSpace) {
-      if (measureText(value).width > horizontalSpace / 2) {
-        return strings.truncateText(value, horizontalSpace, measureText);
-      }
-      return strings.truncateText(label, horizontalSpace - measureText(value ? ':' + value : '').width, measureText) + (value ? ':' + value : '');
-    }
-    return result;
+    return [label + (value ? ': ' + value : '')];
   }
 
-  _computeTooltipLabelColor(tooltipItem, chart) {
-    let config = chart.config,
-      tooltips = config.options ? config.options.tooltips : null,
-      tooltipBackgroundColor = tooltips ? tooltips.backgroundColor : null,
-      datasets = chart.data ? chart.data.datasets : null,
-      dataset = datasets ? datasets[tooltipItem.datasetIndex] : null,
-      backgroundColor;
-    if (scout.isOneOf((dataset.type || config.type), Chart.Type.LINE, Chart.Type.BAR, Chart.Type.BAR_HORIZONTAL, Chart.Type.RADAR, Chart.Type.BUBBLE)) {
-      backgroundColor = dataset.legendColor || dataset.borderColor;
-    }
-    if (scout.isOneOf(config.type, Chart.Type.PIE, Chart.Type.DOUGHNUT, Chart.Type.POLAR_AREA)) {
-      let legendColor = Array.isArray(dataset.legendColor) ? dataset.legendColor[tooltipItem.index] : dataset.legendColor,
-        datasetBackgroundColor = Array.isArray(dataset.backgroundColor) ? dataset.backgroundColor[tooltipItem.index] : dataset.backgroundColor;
-      backgroundColor = legendColor || this._adjustColorOpacity(datasetBackgroundColor, 1);
-    }
-    if (!backgroundColor || typeof backgroundColor === 'function') {
-      let defaultTypeTooltipLabelColor;
-      if (ChartJs.defaults[config.type] && ChartJs.defaults[config.type].callbacks) {
-        defaultTypeTooltipLabelColor = ChartJs.defaults[config.type].callbacks.labelColor;
+  _renderTooltip(context) {
+    let isSegmentExit = context.tooltip.opacity === 0 || context.tooltip._tooltipItems.length < 1; // hide tooltip
+    if (isSegmentExit) {
+      if (this._tooltipTimeoutId) {
+        clearTimeout(this._tooltipTimeoutId);
+        this._tooltipTimeoutId = undefined;
       }
-      let defaultTooltipLabelColor = defaultTypeTooltipLabelColor || ChartJs.defaults.tooltips.callbacks.labelColor;
-      backgroundColor = defaultTooltipLabelColor.call(chart, tooltipItem, chart).backgroundColor;
+      if (this._tooltip) {
+        this._tooltip.destroy();
+        this._tooltip = null;
+      }
+      return;
     }
-    return {
-      borderColor: tooltipBackgroundColor,
-      backgroundColor: backgroundColor
-    };
+
+    let isTooltipShowing = !!this._tooltip;
+    if (isTooltipShowing) {
+      this._renderTooltipLater(context);
+    } else {
+      this._tooltipTimeoutId = setTimeout(() => this._renderTooltipLater(context), tooltips.DEFAULT_TOOLTIP_DELAY);
+    }
+  }
+
+  _renderTooltipLater(context) {
+    if (context.tooltip._tooltipItems.length < 1) {
+      return;
+    }
+    if (this._tooltip) {
+      this._tooltip.destroy();
+      this._tooltip = null;
+    }
+
+    let titles = this._formatTooltipTitle(context.tooltip._tooltipItems, context.chart.data);
+    let labels = this._formatTooltipLabel(context.chart.data, context.tooltip._tooltipItems[0]);
+    let tooltipText = titles.concat(labels)
+      .map(t => strings.encode(t))
+      .join('<br>');
+    let tooltipModel = $.extend({}, this.chart.config.options.tooltip, {
+      objectType: 'Tooltip',
+      parent: this.chart,
+      $anchor: this.chart.$container,
+      tooltipPosition: 'bottom',
+      text: tooltipText,
+      htmlEnabled: true
+    });
+
+    this._tooltip = scout.create(tooltipModel);
+    this._tooltip.render();
+
+    let position = context.chart.canvas.getBoundingClientRect();
+    let xOffset = -15;
+    let yOffset = 0;
+    if (this.chart.config.type === Chart.Type.BUBBLE) {
+      yOffset = 15;
+    }
+    this._tooltip.$container
+      .cssLeft(position.left + window.pageXOffset + context.tooltip.caretX + xOffset)
+      .cssTop(position.top + window.pageYOffset + context.tooltip.caretY + yOffset)
+      .css('pointer-events', 'none');
   }
 
   _adjustGrid(config) {
@@ -1205,7 +1193,6 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
     this._adjustColorSchemeCssClass(config);
     this._adjustDatasetColors(config);
     this._adjustLegendColors(config);
-    this._adjustTooltipColors(config);
     this._adjustScaleColors(config);
     this._adjustScalesColors(config);
     this._adjustPluginColors(config);
@@ -1582,24 +1569,6 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
     return labels;
   }
 
-  _adjustTooltipColors(config) {
-    if (!config || !config.type || !config.options) {
-      return;
-    }
-
-    let tooltipBackgroundColor = this._computeTooltipBackgroundColor(config.type);
-    config.options = $.extend(true, {}, config.options, {
-      tooltips: {
-        backgroundColor: tooltipBackgroundColor,
-        multiKeyBackground: tooltipBackgroundColor
-      }
-    });
-  }
-
-  _computeTooltipBackgroundColor(type) {
-    return styles.get([this.colorSchemeCssClass, type + '-chart', 'elements', 'tooltip-background'], 'fill').fill;
-  }
-
   _adjustScaleColors(config) {
     if (!config || !config.type || !config.options || !config.options.scale) {
       return;
@@ -1659,7 +1628,7 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
       elem.ticks = $.extend(true, {}, elem.ticks, {
         fontColor: labelColor
       });
-      elem.scaleLabel = $.extend(true, {}, elem.scaleLabel, {
+      elem.title = $.extend(true, {}, elem.title, {
         fontColor: axisLabelColor
       });
     });
@@ -2302,10 +2271,10 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
       yAxisScaleLabel = scales.scaleLabelByTypeMap ? scales.scaleLabelByTypeMap[yAxisType] : null,
       yAxisDiffTypeScaleLabel = scales.scaleLabelByTypeMap ? scales.scaleLabelByTypeMap[yAxisDiffTypeType] : null;
 
-    yAxis.scaleLabel.display = true;
-    yAxis.scaleLabel.labelString = yAxisScaleLabel ? yAxisScaleLabel + ' (' + yAxisTypeLabel + ')' : yAxisTypeLabel;
-    yAxisDiffType.scaleLabel.display = true;
-    yAxisDiffType.scaleLabel.labelString = yAxisDiffTypeScaleLabel ? yAxisDiffTypeScaleLabel + ' (' + yAxisDiffTypeTypeLabel + ')' : yAxisDiffTypeTypeLabel;
+    yAxis.title.display = true;
+    yAxis.title.text = yAxisScaleLabel ? yAxisScaleLabel + ' (' + yAxisTypeLabel + ')' : yAxisTypeLabel;
+    yAxisDiffType.title.display = true;
+    yAxisDiffType.title.text = yAxisDiffTypeScaleLabel ? yAxisDiffTypeScaleLabel + ' (' + yAxisDiffTypeTypeLabel + ')' : yAxisDiffTypeTypeLabel;
 
     datasets.forEach(dataset => {
       dataset.yAxisID = 'yAxis';
