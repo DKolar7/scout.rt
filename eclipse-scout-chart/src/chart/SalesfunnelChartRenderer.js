@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2020 BSI Business Systems Integration AG.
+ * Copyright (c) 2010-2021 BSI Business Systems Integration AG.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -157,10 +157,11 @@ export default class SalesfunnelChartRenderer extends AbstractSvgChartRenderer {
         .attr('opacity', 0)
         .animateSVG('opacity', 1, this.animationDuration, null, true);
     }
-    if (this.chart.config.options.tooltips.enabled && this.chart.data.axes.length > 0) {
+    if (this.chart.config.options.plugins && this.chart.config.options.plugins.tooltip && this.chart.config.options.plugins.tooltip.enabled
+      && this.chart.data.axes.length > 0) {
       let desc = this.chart.data.axes[barIndexFromTop][secondLabel ? 1 : 0].label,
-        textBoundings = this._measureText(label, labelClass);
-      this._renderWireLabels(desc, $label, x - textBoundings.width / 2, y - textBoundings.height);
+        textBounds = this._measureText(label, labelClass);
+      this._renderWireLabels(desc, $label, x - textBounds.width / 2, y - textBounds.height);
     }
   }
 
@@ -207,12 +208,11 @@ export default class SalesfunnelChartRenderer extends AbstractSvgChartRenderer {
       return;
     }
     let ctrlY = barIndexFromTop * this.barHeight,
-      labelRenderPointY = ctrlY,
       labelClass = this._dynamicCssClass('salesfunnel-conversionrate-label');
 
     let $label = this.$svg.appendSVG('text', labelClass)
       .attr('x', startPointX)
-      .attr('y', labelRenderPointY)
+      .attr('y', ctrlY)
       .text('↓ ' + conversionRate + '%');
     if (this.animationDuration) {
       $label

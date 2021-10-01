@@ -712,8 +712,10 @@ export default class ChartTableControl extends TableControl {
         handleResize: true,
         colorScheme: this.chartColorScheme,
         maxSegments: 5,
-        legend: {
-          display: false
+        plugins: {
+          legend: {
+            display: false
+          }
         }
       }
     };
@@ -923,8 +925,10 @@ export default class ChartTableControl extends TableControl {
         });
       }
       config.options = $.extend(true, {}, config.options, {
-        tooltips: {
-          titleFontFamily: fontFamily
+        plugins: {
+          tooltip: {
+            titleFontFamily: fontFamily
+          }
         }
       });
     }

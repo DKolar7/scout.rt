@@ -260,10 +260,10 @@ export default class Device {
     browser = scout.nvl(browser, this.browser);
     version = scout.nvl(version, this.browserVersion);
     let browsers = Device.Browser;
-    return !((browser === browsers.INTERNET_EXPLORER && version < 11) ||
-      (browser === browsers.CHROME && version < 40) ||
-      (browser === browsers.FIREFOX && version < 35) ||
-      (browser === browsers.SAFARI && version < 8));
+    return (browser === browsers.CHROME && version >= 55)
+      || (browser === browsers.FIREFOX && version >= 55)
+      || (browser === browsers.SAFARI && version >= 13)
+      || (browser === browsers.EDGE && version >= 15);
   }
 
   /**

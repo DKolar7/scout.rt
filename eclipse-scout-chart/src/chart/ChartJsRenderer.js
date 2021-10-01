@@ -11,30 +11,24 @@
 import {AbstractChartRenderer, Chart} from '../index';
 import ChartJs from 'chart.js/auto';
 import {arrays, colorSchemes, Event, numbers, objects, scout, strings, styles, tooltips} from '@eclipse-scout/core';
-// noinspection ES6UnusedImports
-import chartjs_plugin_datalabels from 'chartjs-plugin-datalabels';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
 import $ from 'jquery';
+
+ChartJs.register(ChartDataLabels);
 
 /**
  * @typedef ChartJs
  * @property {object} [defaults]
- * @property {object} [defaults.global]
- * @property {object} [defaults.global.legend]
- * @property {object} [defaults.global.legend.labels]
- * @property {object} [defaults.global.elements]
- * @property {object} [defaults.global.elements.line]
- * @property {object} [defaults.global.elements.point]
- * @property {object} [defaults.global.elements.arc]
- * @property {object} [defaults.global.elements.rectangle]
+ * @property {object} [defaults.plugins.legend]
+ * @property {object} [defaults.plugins.legend.labels]
+ * @property {object} [defaults.elements]
+ * @property {object} [defaults.elements.line]
+ * @property {object} [defaults.elements.point]
+ * @property {object} [defaults.elements.arc]
+ * @property {object} [defaults.elements.rectangle]
  */
 $.extend(true, ChartJs.defaults, {
   maintainAspectRatio: false,
-  legend: {
-    labels: {
-      usePointStyle: true,
-      boxWidth: 7
-    }
-  },
   elements: {
     line: {
       tension: 0,
@@ -54,6 +48,14 @@ $.extend(true, ChartJs.defaults, {
     rectangle: {
       borderWidth: 1,
       borderSkipped: ''
+    }
+  },
+  plugins: {
+    legend: {
+      labels: {
+        usePointStyle: true,
+        boxWidth: 7
+      }
     }
   },
   overrides: {
@@ -227,9 +229,9 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
     /**
      * @property {number} options.bubble.sizeOfLargestBubble
      * @property {object} options.numberFormatter
-     * @property {object} options.scales.scaleLabelByTypeMap
-     * @property {object} options.scales.xLabelMap
-     * @property {object} options.scales.yLabelMap
+     * @property {object} options.scaleLabelByTypeMap
+     * @property {object} options.xLabelMap
+     * @property {object} options.yLabelMap
      */
     let config = $.extend(true, {}, this.chart.config);
     this._adjustConfig(config);
@@ -280,7 +282,10 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
       }
       // 1. Property not set on target
       if (!target[property]) {
-        target[property] = source[property];
+        let src = source[property];
+        if (src || setToUndefined) {
+          target[property] = src;
+        }
         return;
       }
       // 2. Property not set on source
@@ -409,8 +414,8 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
     }
 
     // update label maps for scales (the label maps, despite being part of the config, can be updated, without redrawing the whole chart)
-    transferProperty(config.options.scales, this.chartJs.config.options.scales, 'xLabelMap', false);
-    transferProperty(config.options.scales, this.chartJs.config.options.scales, 'yLabelMap', false);
+    transferProperty(config.options, this.chartJs.config.options, 'xLabelMap', true);
+    transferProperty(config.options, this.chartJs.config.options, 'yLabelMap', true);
 
     $.extend(true, this.chartJs.config, {
       options: {
@@ -526,13 +531,17 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
     if (config.type === Chart.Type.COMBO_BAR_LINE) {
       config.type = Chart.Type.BAR;
 
-      let scaleLabelByTypeMap = ((config.options || {}).scales || {}).scaleLabelByTypeMap;
+      let scaleLabelByTypeMap = (config.options || {}).scaleLabelByTypeMap;
       if (scaleLabelByTypeMap) {
         scaleLabelByTypeMap[Chart.Type.BAR] = scaleLabelByTypeMap[Chart.Type.COMBO_BAR_LINE];
       }
     } else if (config.type === Chart.Type.BAR_HORIZONTAL) {
       config.type = Chart.Type.BAR;
       config.options.indexAxis = 'y';
+      let scaleLabelByTypeMap = (config.options || {}).scaleLabelByTypeMap;
+      if (scaleLabelByTypeMap) {
+        scaleLabelByTypeMap[Chart.Type.BAR] = scaleLabelByTypeMap[Chart.Type.BAR_HORIZONTAL];
+      }
     }
   }
 
@@ -542,10 +551,7 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
 
     let setLabelMap = (identifier, labelMap) => {
       if (!$.isEmptyObject(labelMap)) {
-        config.options = $.extend(true, {}, {
-          scales: {}
-        }, config.options);
-        config.options.scales[identifier] = labelMap;
+        config.options[identifier] = labelMap;
       }
     };
 
@@ -640,7 +646,7 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
     if (!config.data.maxSegmentsExceeded || !config.options.maxSegments) {
       return false;
     }
-    return config.options.maxSegments - 1 <= index;
+    return config.options.maxSegments <= index;
   }
 
   _adjustBubbleRadii(config) {
@@ -692,9 +698,9 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
       title,
       defaultGlobal = ChartJs.defaults,
       defaultTypeTooltips = {},
-      defaultGlobalTooltips = defaultGlobal.tooltips;
-    if (ChartJs.defaults[config.type]) {
-      defaultTypeTooltips = $.extend(true, {}, defaultTypeTooltips, ChartJs.defaults[config.type].tooltips);
+      defaultGlobalTooltips = defaultGlobal.plugins.tooltip;
+    if (ChartJs.defaults[config.type] && ChartJs.defaults[config.type].plugins) {
+      defaultTypeTooltips = $.extend(true, {}, defaultTypeTooltips, ChartJs.defaults[config.type].plugins.tooltip);
     }
     if (scout.isOneOf(config.type, Chart.Type.PIE, Chart.Type.DOUGHNUT, Chart.Type.POLAR_AREA, Chart.Type.LINE, Chart.Type.BAR, Chart.Type.BAR_HORIZONTAL, Chart.Type.RADAR)) {
       let label = data.labels[tooltipItem.dataIndex];
@@ -733,9 +739,9 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
       label, value,
       defaultGlobal = ChartJs.defaults,
       defaultTypeTooltips = {},
-      defaultGlobalTooltips = defaultGlobal.tooltips;
-    if (ChartJs.defaults[config.type]) {
-      defaultTypeTooltips = $.extend(true, {}, defaultTypeTooltips, ChartJs.defaults[config.type].tooltips);
+      defaultGlobalTooltips = defaultGlobal.plugins.tooltip;
+    if (ChartJs.defaults[config.type] && ChartJs.defaults[config.type].plugins) {
+      defaultTypeTooltips = $.extend(true, {}, defaultTypeTooltips, ChartJs.defaults[config.type].plugins.tooltip);
     }
     if (scout.isOneOf(config.type, Chart.Type.PIE, Chart.Type.DOUGHNUT, Chart.Type.POLAR_AREA, Chart.Type.LINE, Chart.Type.BAR, Chart.Type.BAR_HORIZONTAL, Chart.Type.RADAR)) {
       label = dataset.label;
@@ -755,8 +761,11 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
   }
 
   _renderTooltip(context) {
-    let isSegmentExit = context.tooltip.opacity === 0 || context.tooltip._tooltipItems.length < 1; // hide tooltip
-    if (isSegmentExit) {
+    let externalTooltipEnabled = !this.chart.config.options.plugins
+      || !this.chart.config.options.plugins.tooltip
+      || this.chart.config.options.plugins.tooltip.externalEnabled !== false;
+    let isHideTooltip = !externalTooltipEnabled || context.tooltip.opacity === 0 || context.tooltip._tooltipItems.length < 1;
+    if (isHideTooltip) {
       if (this._tooltipTimeoutId) {
         clearTimeout(this._tooltipTimeoutId);
         this._tooltipTimeoutId = undefined;
@@ -790,7 +799,8 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
     let tooltipText = titles.concat(labels)
       .map(t => strings.encode(t))
       .join('<br>');
-    let tooltipModel = $.extend({}, this.chart.config.options.tooltip, {
+    let pluginsOptions = this.chart.config.options.plugins ? this.chart.config.options.plugins.tooltip : {};
+    let tooltipModel = $.extend({}, pluginsOptions, {
       objectType: 'Tooltip',
       parent: this.chart,
       $anchor: this.chart.$container,
@@ -1027,8 +1037,8 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
   }
 
   _getLabelMap(identifier) {
-    if (this.chartJs && this.chartJs.config && this.chartJs.config.options && this.chartJs.config.options.scales) {
-      return this.chartJs.config.options.scales[identifier];
+    if (this.chartJs && this.chartJs.config && this.chartJs.config.options) {
+      return this.chartJs.config.options[identifier];
     }
   }
 
@@ -1136,19 +1146,18 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
   }
 
   _displayDatalabelsOnRadialChart(context) {
-    let data = context.chart.getDatasetMeta(context.datasetIndex).data[context.dataIndex],
-      model = data._model,
-      // Compute the biggest circle that fits inside sector/arc with center in the middle between inner and outer radius.
-      // First compute a circle C1 that touches the straight boundaries of the sector/arc. Then compute a circle C2 that touches the inner and the outer radius.
-      // The smaller one of these two circles is the biggest possible circle that fits inside sector/arc with center in the middle between inner and outer radius.
-      // circle C1:
-      midRadius = (model.outerRadius + model.innerRadius) / 2,
+    let element = context.chart.getDatasetMeta(context.datasetIndex).data[context.dataIndex];
+    // Compute the biggest circle that fits inside sector/arc with center in the middle between inner and outer radius.
+    // First compute a circle C1 that touches the straight boundaries of the sector/arc. Then compute a circle C2 that touches the inner and the outer radius.
+    // The smaller one of these two circles is the biggest possible circle that fits inside sector/arc with center in the middle between inner and outer radius.
+    // circle C1:
+    let midRadius = (element.outerRadius + element.innerRadius) / 2,
       // If the difference between the angles is greater than pi, it is no longer possible for a circle to be inside the sector/arc and touch both straight boundaries.
-      angle = Math.min((model.endAngle - model.startAngle), Math.PI) / 2,
+      angle = Math.min((element.endAngle - element.startAngle), Math.PI) / 2,
       radius1 = Math.abs(Math.sin(angle)) * midRadius,
       diameter1 = radius1 * 2,
       // circle C2:
-      diameter2 = model.outerRadius - model.innerRadius;
+      diameter2 = element.outerRadius - element.innerRadius;
     return Math.min(diameter1, diameter2) > this.minRadialChartDatalabelSpace;
   }
 
@@ -1520,10 +1529,12 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
     }
 
     config.options = $.extend(true, {}, config.options, {
-      legend: {
-        labels: {
-          fontColor: this._computeLabelColor(config.type),
-          generateLabels: this._legendLabelGenerator
+      plugins: {
+        legend: {
+          labels: {
+            fontColor: this._computeLabelColor(config.type),
+            generateLabels: this._legendLabelGenerator
+          }
         }
       }
     });
@@ -1538,14 +1549,14 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
       data = config.data,
       measureText = chart.ctx.measureText.bind(chart.ctx),
       horizontalSpace;
-    if (scout.isOneOf(config.options.legend.position, Chart.Position.LEFT, Chart.Position.RIGHT)) {
+    if (scout.isOneOf(config.options.plugins.legend.position, Chart.Position.LEFT, Chart.Position.RIGHT)) {
       horizontalSpace = Math.min(250, this.$canvas.cssWidth() / 3);
     } else {
       horizontalSpace = Math.min(250, this.$canvas.cssWidth() * 2 / 3);
     }
     let defaultTypeGenerateLabels;
-    if (ChartJs.defaults[config.type] && ChartJs.defaults[config.type].legend && ChartJs.defaults[config.type].legend.labels) {
-      defaultTypeGenerateLabels = ChartJs.defaults[config.type].legend.labels.generateLabels;
+    if (ChartJs.defaults[config.type] && ChartJs.defaults[config.type].plugins && ChartJs.defaults[config.type].plugins.legend && ChartJs.defaults[config.type].plugins.legend.labels) {
+      defaultTypeGenerateLabels = ChartJs.defaults[config.type].plugins.legend.labels.generateLabels;
     }
     let defaultGenerateLabels = defaultTypeGenerateLabels || ChartJs.defaults.plugins.legend.labels.generateLabels;
     let labels = defaultGenerateLabels.call(chart, chart);
@@ -1672,18 +1683,22 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
       config.options.onHover = this._hoverHandler;
     }
 
-    if (!config.options.legend) {
+    if (!config.options.plugins) {
+      return;
+    }
+    let legendOptions = config.options.plugins.legend;
+    if (!legendOptions) {
       return;
     }
 
-    if (config.options.legend.clickable) {
-      config.options.legend.onClick = this._legendClickHandler;
-      config.options.legend.onHover = this._legendPointerHoverHandler;
-      config.options.legend.onLeave = this._legendPointerLeaveHandler;
+    if (legendOptions.clickable) {
+      legendOptions.onClick = this._legendClickHandler;
+      legendOptions.onHover = this._legendPointerHoverHandler;
+      legendOptions.onLeave = this._legendPointerLeaveHandler;
     } else {
-      config.options.legend.onClick = e => e.stopPropagation();
-      config.options.legend.onHover = this._legendHoverHandler;
-      config.options.legend.onLeave = this._legendLeaveHandler;
+      legendOptions.onClick = undefined;
+      legendOptions.onHover = this._legendHoverHandler;
+      legendOptions.onLeave = this._legendLeaveHandler;
     }
   }
 
@@ -1698,12 +1713,12 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
     }
     let relevantItem = this._selectRelevantItem(items);
 
-    if (this._isMaxSegmentsExceeded(this.chartJs.config, relevantItem._index)) {
+    if (this._isMaxSegmentsExceeded(this.chartJs.config, relevantItem.index)) {
       return;
     }
 
-    let itemIndex = relevantItem._index,
-      datasetIndex = relevantItem._datasetIndex,
+    let itemIndex = relevantItem.index,
+      datasetIndex = relevantItem.datasetIndex,
       clickObject = {
         datasetIndex: datasetIndex,
         dataIndex: itemIndex
@@ -1785,28 +1800,28 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
     }
   }
 
-  _onLegendClick(event, item) {
+  _onLegendClick(e, legendItem, legend) {
     if (!this.chartJs.config || !this.chartJs.config.type) {
       return;
     }
 
     let type = this.chartJs.config.type,
       defaultTypeLegendClick;
-    if (ChartJs.defaults[type] && ChartJs.defaults[type].legend) {
-      defaultTypeLegendClick = ChartJs.defaults[type].legend.onClick;
+    if (ChartJs.defaults[type] && ChartJs.defaults[type].plugins && ChartJs.defaults[type].plugins.legend) {
+      defaultTypeLegendClick = ChartJs.defaults[type].plugins.legend.onClick;
     }
     let defaultLegendClick = defaultTypeLegendClick || ChartJs.defaults.plugins.legend.onClick;
-    defaultLegendClick.call(this.chartJs, event, item);
-    this._onLegendLeave(event, item);
-    this._onLegendHoverPointer(event, item, true);
+    defaultLegendClick.call(this.chartJs, e, legendItem, legend);
+    this._onLegendLeave(e, legendItem, legend);
+    this._onLegendHoverPointer(e, legendItem, true);
   }
 
-  _onLegendHover(event, item, animated) {
-    let index = item.datasetIndex,
+  _onLegendHover(e, legendItem, legend) {
+    let index = legendItem.datasetIndex,
       config = this.chartJs.config,
       type = config.type;
     if (scout.isOneOf(type, Chart.Type.PIE, Chart.Type.DOUGHNUT, Chart.Type.POLAR_AREA)) {
-      index = item.index;
+      index = legendItem.index;
     }
 
     if (this.legendHoverDatasets.indexOf(index) > -1) {
@@ -1820,25 +1835,21 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
       this.chartJs.update();
     }
     this._updateHoverStyle(index, true);
-    if (animated) {
-      this.chartJs.render();
-    } else {
-      this.chartJs.render({duration: 0});
-    }
+    this.chartJs.render();
     this.legendHoverDatasets.push(index);
   }
 
-  _onLegendHoverPointer(event, item, animated) {
-    this._onLegendHover(event, item, animated);
+  _onLegendHoverPointer(e, legendItem, legend) {
+    this._onLegendHover(e, legendItem, legend);
     this.$canvas.css('cursor', 'pointer');
   }
 
-  _onLegendLeave(event, item) {
-    let index = item.datasetIndex,
+  _onLegendLeave(e, legendItem, legend) {
+    let index = legendItem.datasetIndex,
       config = this.chartJs.config,
       type = config.type;
     if (scout.isOneOf(type, Chart.Type.PIE, Chart.Type.DOUGHNUT, Chart.Type.POLAR_AREA)) {
-      index = item.index;
+      index = legendItem.index;
     }
 
     if (this.legendHoverDatasets.indexOf(index) < 0) {
@@ -1887,30 +1898,33 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
     }
   }
 
-  _onLegendLeavePointer(event, item) {
-    this._onLegendLeave(event, item);
+  _onLegendLeavePointer(e, legendItem, legend) {
+    this._onLegendLeave(e, legendItem, legend);
     this.$canvas.css('cursor', 'default');
   }
 
   _updateHoverStyle(index, enabled) {
     let config = this.chartJs.config,
       type = config.type,
+      mode,
       datasets = config.data.datasets,
       dataset = datasets ? datasets[index] : null,
       datasetType = dataset ? dataset.type : null;
     if ((datasetType || type) === Chart.Type.LINE) {
-      this.chartJs.updateHoverStyle(this.chartJs.getDatasetMeta(index).data, 'point', enabled);
+      mode = 'point';
     } else if (scout.isOneOf(type, Chart.Type.PIE, Chart.Type.DOUGHNUT, Chart.Type.POLAR_AREA)) {
-      let elements = [];
-      for (let i = 0; i < datasets.length; i++) {
-        elements.push(this.chartJs.getDatasetMeta(i).data[index]);
-      }
-      this.chartJs.updateHoverStyle(elements, 'point', enabled);
+      mode = 'point';
     } else {
-      let elements = this.chartJs.getDatasetMeta(index).data;
-      if (elements && elements.length) {
-        this.chartJs.updateHoverStyle(this.chartJs.getDatasetMeta(index).data, 'dataset', enabled);
-      }
+      mode = 'dataset';
+    }
+    let elements = this.chartJs.legend.legendItems;
+    if (elements && elements.length) {
+      elements = elements.map(e => $.extend({}, {
+        element: e,
+        datasetIndex: e.datasetIndex,
+        index: 0
+      }));
+      this.chartJs.updateHoverStyle(elements, mode, enabled);
     }
   }
 
@@ -2268,8 +2282,8 @@ export default class ChartJsRenderer extends AbstractChartRenderer {
       yAxisDiffTypeType = (datasetsDiffType[0].type || type),
       yAxisTypeLabel = this.chart.session.text('ui.' + yAxisType),
       yAxisDiffTypeTypeLabel = this.chart.session.text('ui.' + yAxisDiffTypeType),
-      yAxisScaleLabel = scales.scaleLabelByTypeMap ? scales.scaleLabelByTypeMap[yAxisType] : null,
-      yAxisDiffTypeScaleLabel = scales.scaleLabelByTypeMap ? scales.scaleLabelByTypeMap[yAxisDiffTypeType] : null;
+      yAxisScaleLabel = config.options.scaleLabelByTypeMap ? config.options.scaleLabelByTypeMap[yAxisType] : null,
+      yAxisDiffTypeScaleLabel = config.options.scaleLabelByTypeMap ? config.options.scaleLabelByTypeMap[yAxisDiffTypeType] : null;
 
     yAxis.title.display = true;
     yAxis.title.text = yAxisScaleLabel ? yAxisScaleLabel + ' (' + yAxisTypeLabel + ')' : yAxisTypeLabel;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2020 BSI Business Systems Integration AG.
+ * Copyright (c) 2010-2021 BSI Business Systems Integration AG.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,6 +11,7 @@
 package org.eclipse.scout.rt.chart.shared.data.basic.chart;
 
 import static org.eclipse.scout.rt.platform.util.StringUtility.*;
+
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -45,6 +46,7 @@ public class ChartConfig implements IChartConfig {
 
   protected static final String TYPE = "type";
   protected static final String OPTIONS = "options";
+  protected static final String PLUGINS = combine(OPTIONS, "plugins");
   protected static final String AUTO_COLOR = combine(OPTIONS, "autoColor");
   protected static final String COLOR_SCHEME = combine(OPTIONS, "colorScheme");
   protected static final String TRANSPARENT = combine(OPTIONS, "transparent");
@@ -53,9 +55,9 @@ public class ChartConfig implements IChartConfig {
   protected static final String CHECKABLE = combine(OPTIONS, "checkable");
   protected static final String ANIMATION = combine(OPTIONS, "animation");
   protected static final String ANIMATION_DURATION = combine(ANIMATION, "duration");
-  protected static final String TOOLTIPS = combine(OPTIONS, "tooltips");
-  protected static final String TOOLTIPS_ENABLED = combine(TOOLTIPS, "enabled");
-  protected static final String LEGEND = combine(OPTIONS, "legend");
+  protected static final String TOOLTIP = combine(PLUGINS, "tooltip");
+  protected static final String TOOLTIP_ENABLED = combine(TOOLTIP, "externalEnabled");
+  protected static final String LEGEND = combine(PLUGINS, "legend");
   protected static final String LEGEND_DISPLAY = combine(LEGEND, "display");
   protected static final String LEGEND_CLICKABLE = combine(LEGEND, "clickable");
   protected static final String LEGEND_POSITION = combine(LEGEND, "position");
@@ -64,16 +66,15 @@ public class ChartConfig implements IChartConfig {
   protected static final String LINE_TENSION = combine(LINE, "tension");
   protected static final String LINE_FILL = combine(LINE, "fill");
   protected static final String SCALES = combine(OPTIONS, "scales");
-  protected static final String SCALE_LABEL_BY_TYPE_MAP = combine(SCALES, "scaleLabelByTypeMap");
-  protected static final String X_LABEL_MAP = combine(SCALES, "xLabelMap");
-  protected static final String Y_LABEL_MAP = combine(SCALES, "yLabelMap");
+  protected static final String SCALE_LABEL_BY_TYPE_MAP = combine(OPTIONS, "scaleLabelByTypeMap");
+  protected static final String X_LABEL_MAP = combine(OPTIONS, "xLabelMap");
+  protected static final String Y_LABEL_MAP = combine(OPTIONS, "yLabelMap");
   protected static final String X_AXES = combine(SCALES, "xAxes");
   protected static final String Y_AXES = combine(SCALES, "yAxes");
   protected static final String STACKED = "stacked";
-  protected static final String SCALE_LABEL = "scaleLabel";
-  protected static final String SCALE_LABEL_DISPLAY = combine(SCALE_LABEL, "display");
-  protected static final String SCALE_LABEL_LABEL = combine(SCALE_LABEL, "labelString");
-  protected static final String PLUGINS = combine(OPTIONS, "plugins");
+  protected static final String SCALE_TITLE = "title";
+  protected static final String SCALE_LABEL_DISPLAY = combine(SCALE_TITLE, "display");
+  protected static final String SCALE_LABEL_TEXT = combine(SCALE_TITLE, "text");
   protected static final String DATALABELS = combine(PLUGINS, "datalabels");
   protected static final String DATALABELS_DISPLAY = combine(DATALABELS, "display");
 
@@ -548,17 +549,17 @@ public class ChartConfig implements IChartConfig {
 
   @Override
   public IChartConfig withTooltipsEnabled(boolean tooltipsEnabled) {
-    return withProperty(TOOLTIPS_ENABLED, tooltipsEnabled);
+    return withProperty(TOOLTIP_ENABLED, tooltipsEnabled);
   }
 
   @Override
   public IChartConfig removeTooltipsEnabled() {
-    return removeProperty(TOOLTIPS_ENABLED);
+    return removeProperty(TOOLTIP_ENABLED);
   }
 
   @Override
   public boolean isTooltipsEnabled() {
-    return BooleanUtility.nvl((Boolean) getProperty(TOOLTIPS_ENABLED));
+    return BooleanUtility.nvl((Boolean) getProperty(TOOLTIP_ENABLED));
   }
 
   @Override
@@ -748,15 +749,15 @@ public class ChartConfig implements IChartConfig {
   }
 
   protected IChartConfig withXAxisLabel(String label, int index) {
-    return withArrayProperty(X_AXES, index, SCALE_LABEL_LABEL, label);
+    return withArrayProperty(X_AXES, index, SCALE_LABEL_TEXT, label);
   }
 
   protected IChartConfig removeXAxisLabel(int index) {
-    return removeArrayProperty(X_AXES, index, SCALE_LABEL_LABEL);
+    return removeArrayProperty(X_AXES, index, SCALE_LABEL_TEXT);
   }
 
   protected String getXAxisLabel(int index) {
-    return (String) getArrayProperty(X_AXES, index, SCALE_LABEL_LABEL);
+    return (String) getArrayProperty(X_AXES, index, SCALE_LABEL_TEXT);
   }
 
   @Override
@@ -845,15 +846,15 @@ public class ChartConfig implements IChartConfig {
   }
 
   protected IChartConfig withYAxisLabel(String label, int index) {
-    return withArrayProperty(Y_AXES, index, SCALE_LABEL_LABEL, label);
+    return withArrayProperty(Y_AXES, index, SCALE_LABEL_TEXT, label);
   }
 
   protected IChartConfig removeYAxisLabel(int index) {
-    return removeArrayProperty(Y_AXES, index, SCALE_LABEL_LABEL);
+    return removeArrayProperty(Y_AXES, index, SCALE_LABEL_TEXT);
   }
 
   protected String getYAxisLabel(int index) {
-    return (String) getArrayProperty(Y_AXES, index, SCALE_LABEL_LABEL);
+    return (String) getArrayProperty(Y_AXES, index, SCALE_LABEL_TEXT);
   }
 
   @Override

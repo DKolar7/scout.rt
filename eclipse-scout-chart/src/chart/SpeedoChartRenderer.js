@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2020 BSI Business Systems Integration AG.
+ * Copyright (c) 2010-2021 BSI Business Systems Integration AG.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -203,8 +203,8 @@ export default class SpeedoChartRenderer extends AbstractSvgChartRenderer {
       legendValue = value ? this._formatValue(value) : 0,
       maxLegendValue = maxValue ? this._formatValue(maxValue) : 0;
 
-    // tooltips for min/max value
-    if (this.chart.config.options.tooltips.enabled) {
+    // tooltip for min/max value
+    if (this.chart.config.options.plugins && this.chart.config.options.plugins.tooltip && this.chart.config.options.plugins.tooltip.enabled) {
       // min value
       let $minLegend = this.$svg.appendSVG('text', 'line-label line-chart-wire-label')
         .attr('x', this.chartBox.mX() - this.r)
