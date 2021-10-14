@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2020 BSI Business Systems Integration AG.
+ * Copyright (c) 2010-2021 BSI Business Systems Integration AG.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -12,6 +12,7 @@ package org.eclipse.scout.rt.client.ui.desktop.internal;
 
 import java.beans.PropertyChangeListener;
 import java.security.Permission;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -104,6 +105,16 @@ public class VirtualDesktop implements IDesktop {
   @Override
   public void removePropertyChangeListener(String propertyName, PropertyChangeListener listener) {
     m_propertyChangeListeners.removePropertyChangeListener(propertyName, listener);
+  }
+
+  @Override
+  public ArrayList<PropertyChangeListener> getPropertyChangeListeners() {
+    return m_propertyChangeListeners.getPropertyChangeListeners();
+  }
+
+  @Override
+  public Map<String, List<PropertyChangeListener>> getSpecificPropertyChangeListeners() {
+    return m_propertyChangeListeners.getSpecificPropertyChangeListeners();
   }
 
   @Override
